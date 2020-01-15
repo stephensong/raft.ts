@@ -4,9 +4,9 @@
   "description": "Raft Generic Implementation for TypeScript",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "nodemon --watch src --ext ts --exec ts-node --ignore '*.test.ts' src/main.ts",
+    "dev": "nodemon --watch src --ext ts --exec ts-node --ignore '*.test.ts' src/test/main.ts",
     "build": "tsc",
-    "prod": "node dist/main.js"
+    "prod": "node dist/test/main.js"
   },
   "repository": {
     "type": "git",
@@ -28,5 +28,9 @@
     "ts-node": "^8.6.2",
     "tslint": "^5.20.1",
     "typescript": "^3.7.4"
+  },
+  "dependencies": {
+    "@types/node": "^13.1.6",
+    "ts-nats": "^1.2.4"
   }
 }
