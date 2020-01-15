@@ -12,6 +12,7 @@
 // limitations under the License.
 
 import { EventEmitter } from "events";
+import { TICKER_EVENT } from "./const";
 
 export class Ticker {
     private eventEmitter: EventEmitter;
@@ -26,7 +27,7 @@ export class Ticker {
     public start() {
         const eventEmitter = this.eventEmitter;
         this.interval = setInterval(() => {
-            eventEmitter.emit("ticker");
+            eventEmitter.emit(TICKER_EVENT);
         }, this.tickMilliseconds);
     }
     public stop() {

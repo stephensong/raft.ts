@@ -25,7 +25,7 @@ export class SimpleHandler implements IHandler {
 
     // GrantVote always returns true for default behavior.
     public grantVote(position: number): boolean {
-        return false;
+        return true;
     }
 
     public asyncError(error: Error): void {

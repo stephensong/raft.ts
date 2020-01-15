@@ -12,21 +12,31 @@
 // limitations under the License.
 
 import { EventEmitter } from "events";
+import { TIMER_EVENT } from "./const";
 
 export class Timer {
     private eventEmitter: EventEmitter;
-    private timeout: NodeJS.Timeout;
+    private timeout?: NodeJS.Timeout;
     constructor(private timerMilliseconds: number) {
-        const eventEmitter = this.eventEmitter = new EventEmitter();
-        this.timeout = setInterval(() => {
-            eventEmitter.emit("timer");
-        }, this.timerMilliseconds);
+        this.eventEmitter = new EventEmitter();
+        this.reset(timerMilliseconds);
     }
     public getEmitter() {
         return this.eventEmitter;
     }
+    public reset(timerMilliseconds: number) {
+        const eventEmitter = this.eventEmitter;
+        if (this.timeout) {
+            clearTimeout(this.timeout);
+        }
+        this.timeout = setInterval(() => {
+            eventEmitter.emit(TIMER_EVENT);
+        }, this.timerMilliseconds);
+    }
     public stop() {
-        clearTimeout(this.timeout);
+        if (this.timeout) {
+            clearTimeout(this.timeout);
+        }
         delete this.timeout;
     }
 }

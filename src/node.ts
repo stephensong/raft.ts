@@ -18,9 +18,10 @@ import {
     MIN_ELECTION_TIMEOUT,
     NO_LEADER,
     NO_VOTE,
-    QUIT_EVENT,
     REQUEST_EVENT,
     RESPONSE_EVENT,
+    TICKER_EVENT,
+    TIMER_EVENT,
 } from "./const";
 
 import { ClusterNameErr, ClusterSizeErr, HandlerReqErr, LogCorruptErr, LogNoStateErr, LogReqErr, RpcDriverReqErr } from "./errors";
@@ -130,9 +131,6 @@ export class Node {
     // Election timer.
     private electTimer?: Timer;
 
-    // quit channel for shutdown on Close().
-    private quit: EventEmitter;
-
     // Registered Listeners to tear down on state change
     private registeredEventEmitters: EventEmitter[];
 
@@ -154,7 +152,6 @@ export class Node {
         this.rpc = rpc;
         this.handler = handler;
         this.leader = NO_LEADER;
-        this.quit = new EventEmitter();
         this.voteRequests = new EventEmitter();
         this.voteResponses = new EventEmitter();
         this.heartBeats = new EventEmitter();
@@ -191,12 +188,23 @@ export class Node {
         return this.id;
     }
 
-    public setupTimers() {
+    // Close will shutdown the raft.ts node and wait until the
+    // state is processed. We will clear rpc, timers, etc.
+    // and close the log.
+    public close() {
+        console.log("Cleanning up...");
+        this.rpc.close();
+        this.clearTimers();
+        this.closeLog();
+        console.log("Done. Exiting now...");
+    }
+
+    private setupTimers() {
         // Election timer
         this.electTimer = new Timer(this.randElectionTimeout());
     }
 
-    public clearTimers() {
+    private clearTimers() {
         if (this.electTimer) {
             this.electTimer.stop();
             delete this.electTimer;
@@ -248,17 +256,14 @@ export class Node {
 
     // Setup callbacks for a LEADER
     private async setupAsLeader() {
-        const hbTicker = new Ticker(HEARTBEAT_INTERVAL);
+        console.log("----setupAsLeader----");
+
         const self = this;
 
-        // Request to quit
-        this.quit.on(QUIT_EVENT, (q) => {
-            self.processQuit(q);
-        });
-        this.registeredEventEmitters.push(this.quit);
+        const hbTicker = new Ticker(HEARTBEAT_INTERVAL);
 
         // Heartbeat tick. Send an HB each time.
-        hbTicker.getEmitter().on("ticker", () => {
+        hbTicker.getEmitter().on(TICKER_EVENT, () => {
             self.rpc.heartBeat({ term: self.term, leader: self.id } as IHeartbeat);
         });
         this.registeredEventEmitters.push(hbTicker.getEmitter());
@@ -267,9 +272,9 @@ export class Node {
         this.voteRequests.on(REQUEST_EVENT, (vreq: IVoteRequest) => {
             // We will stepdown if needed. This can happen if the
             // request is from a newer term than ours.
-            const stepDown = this.handleVoteRequest(vreq);
+            const stepDown = self.handleVoteRequest(vreq);
             if (stepDown) {
-                this.switchToFollower(NO_LEADER);
+                self.switchToFollower(NO_LEADER);
             }
         });
         this.registeredEventEmitters.push(this.voteRequests);
@@ -277,15 +282,19 @@ export class Node {
         // Process another LEADER's heartbeat.
         this.heartBeats.on(HEARTBEAT_EVENT, (hb: IHeartbeat) => {
             // If they are newer, we will step down.
-            const stepDown = this.handleHeartBeat(hb);
+            const stepDown = self.handleHeartBeat(hb);
             if (stepDown) {
-                this.switchToFollower(hb.leader);
+                self.switchToFollower(hb.leader);
             }
         });
         this.registeredEventEmitters.push(this.heartBeats);
     }
 
     private setupAsCandidate() {
+        console.log("----setupAsCandidate----");
+
+        const self = this;
+
         // Initiate an Election
         const vreq = {
             candidate: this.id,
@@ -319,17 +328,11 @@ export class Node {
             return;
         }
 
-        // Request to quit
-        this.quit.on(QUIT_EVENT, (q) => {
-            this.processQuit(q);
-        });
-        this.registeredEventEmitters.push(this.quit);
-
         if (this.electTimer) {
             // An ElectionTimeout causes us to go back into a Candidate
             // state and start a new election.
-            this.electTimer.getEmitter().on("timer", () => {
-                this.switchToCandidate();
+            this.electTimer.getEmitter().on(TIMER_EVENT, () => {
+                self.switchToCandidate();
             });
             this.registeredEventEmitters.push(this.electTimer.getEmitter());
         }
@@ -338,23 +341,23 @@ export class Node {
         this.voteResponses.on(RESPONSE_EVENT, (vresp: IVoteResponse) => {
             // We have a VoteResponse. Only process if
             // it is for our term and Granted is true.
-            if (vresp.granted && vresp.term === this.term) {
+            if (vresp.granted && vresp.term === self.term) {
                 votes++;
-                if (this.wonElection(votes)) {
+                if (self.wonElection(votes)) {
                     // Become LEADER if we have won.
-                    this.switchToLeader();
+                    self.switchToLeader();
                 }
             }
         });
         this.registeredEventEmitters.push(this.voteResponses);
 
         // A Vote Request.
-        this.voteRequests.on("request", (vreqRecvd: IVoteRequest) => {
+        this.voteRequests.on(REQUEST_EVENT, (vreqRecvd: IVoteRequest) => {
             // We will stepdown if needed. This can happen if the
             // request is from a newer term than ours.
-            const stepDown = this.handleVoteRequest(vreqRecvd);
+            const stepDown = self.handleVoteRequest(vreqRecvd);
             if (stepDown) {
-                this.switchToFollower(NO_LEADER);
+                self.switchToFollower(NO_LEADER);
             }
         });
         this.registeredEventEmitters.push(this.voteRequests);
@@ -362,9 +365,9 @@ export class Node {
         // Process a LEADER's heartbeat.
         this.heartBeats.on(HEARTBEAT_EVENT, (hb: IHeartbeat) => {
             // If they are newer, we will step down.
-            const stepDown = this.handleHeartBeat(hb);
+            const stepDown = self.handleHeartBeat(hb);
             if (stepDown) {
-                this.switchToFollower(hb.leader);
+                self.switchToFollower(hb.leader);
             }
         });
         this.registeredEventEmitters.push(this.heartBeats);
@@ -372,25 +375,22 @@ export class Node {
     }
 
     private setupAsFollower() {
+        console.log("----setupAsFollower----");
 
-        // Request to quit
-        this.quit.on(QUIT_EVENT, (q) => {
-            this.processQuit(q);
-        });
-        this.registeredEventEmitters.push(this.quit);
+        const self = this;
 
         if (this.electTimer) {
             // An ElectionTimeout causes us to go back into a Candidate
             // state and start a new election.
-            this.electTimer.getEmitter().on("timer", () => {
-                this.switchToCandidate();
+            this.electTimer.getEmitter().on(TIMER_EVENT, () => {
+                self.switchToCandidate();
             });
             this.registeredEventEmitters.push(this.electTimer.getEmitter());
         }
 
         // A Vote Request.
         this.voteRequests.on(REQUEST_EVENT, (vreq: IVoteRequest) => {
-            const shouldReturn = this.handleVoteRequest(vreq);
+            const shouldReturn = self.handleVoteRequest(vreq);
             if (shouldReturn) {
                 return; // Maybe .... this is wrong
             }
@@ -400,13 +400,13 @@ export class Node {
         // Process a LEADER's heartbeat.
         this.heartBeats.on(HEARTBEAT_EVENT, (hb: IHeartbeat) => {
             // Set the Leader regardless if we currently have none set.
-            if (this.leader === NO_LEADER) {
-                this.setLeader(hb.leader);
+            if (self.leader === NO_LEADER) {
+                self.setLeader(hb.leader);
             }
             // Just set Leader if asked to stepdown.
-            const stepDown = this.handleHeartBeat(hb);
+            const stepDown = self.handleHeartBeat(hb);
             if (stepDown) {
-                this.setLeader(hb.leader);
+                self.setLeader(hb.leader);
             }
         });
         this.registeredEventEmitters.push(this.heartBeats);
@@ -439,7 +439,7 @@ export class Node {
     }
 
     // handleHeartBeat is called to process a heartbeat from a LEADER.
-    // We will indicate to the controlling process loop if we should
+    // We will indicate to the controlling process if we should
     // "stepdown" from our current role.
     private handleHeartBeat(hb: IHeartbeat): boolean {
 
@@ -630,9 +630,8 @@ export class Node {
     // Reset the election timeout with a random value.
     private resetElectionTimeout() {
         if (this.electTimer) {
-            this.electTimer.stop();
+            this.electTimer.reset(this.randElectionTimeout());
         }
-        this.electTimer = new Timer(this.randElectionTimeout());
     }
 
     // Generate a random timeout between MIN and MAX Election timeouts.
@@ -640,31 +639,6 @@ export class Node {
     private randElectionTimeout(): number {
         const delta = Math.floor(Math.random() * (MAX_ELECTION_TIMEOUT - MIN_ELECTION_TIMEOUT));
         return MIN_ELECTION_TIMEOUT + delta;
-    }
-
-    // processQuit will emit the close event to release anyone waiting on it.
-    private processQuit(q: EventEmitter) {
-        q.emit("close");
-    }
-
-    // waitOnLoopFinish will block until the loops are exiting.
-    private waitOnLoopFinish() {
-        const q = new EventEmitter();
-        q.once(QUIT_EVENT, (msg) => {
-            this.quit = msg;
-            // tslint:disable-next-line: no-empty
-            q.on(QUIT_EVENT, () => { });
-        });
-    }
-
-    // Close will shutdown the raft.ts node and wait until the
-    // state is processed. We will clear timers, channels, etc.
-    // and close the log.
-    private close() {
-        this.rpc.close();
-        this.waitOnLoopFinish();
-        this.clearTimers();
-        this.closeLog();
     }
 
     // Return the current state.

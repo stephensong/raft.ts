@@ -94,7 +94,7 @@ export class Nats implements IRPCDriver {
         const vrespSubName = this.vrespSubject(candidate);
         if (vrespSubName) {
             // tslint:disable-next-line: no-console
-            console.log(`sendVoteResponse => ${vrespSubName} = [${JSON.stringify(voteResponse)}]`);
+            // console.log(`sendVoteResponse => ${vrespSubName} = [${JSON.stringify(voteResponse)}]`);
             this.natsClient.publish(vrespSubName, JSON.stringify(voteResponse));
         }
     }
@@ -133,7 +133,7 @@ export class Nats implements IRPCDriver {
             const vreqSubName = self.vreqSubject();
             if (vreqSubName) {
                 // tslint:disable-next-line: no-console
-                console.log(`requestVote => ${vreqSubName} = [${JSON.stringify(voteRequest)}]`);
+                // console.log(`requestVote => ${vreqSubName} = [${JSON.stringify(voteRequest)}]`);
                 self.natsClient.publish(vreqSubName, JSON.stringify(voteRequest), inbox);
             }
         }).catch((err) => {
@@ -146,7 +146,7 @@ export class Nats implements IRPCDriver {
         const hbSubName = this.hbSubject();
         if (hbSubName) {
             // tslint:disable-next-line: no-console
-            console.log(`heartBeat => ${hbSubName} = [${JSON.stringify(heartbeat)}]`);
+            // console.log(`heartBeat => ${hbSubName} = [${JSON.stringify(heartbeat)}]`);
             this.natsClient.publish(hbSubName, JSON.stringify(heartbeat));
         }
     }

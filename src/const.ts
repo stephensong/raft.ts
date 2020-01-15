@@ -27,4 +27,5 @@ export const NO_VOTE   = "";
 export const HEARTBEAT_EVENT = "heartbeat";
 export const REQUEST_EVENT = "request";
 export const RESPONSE_EVENT = "response";
-export const QUIT_EVENT = "quit";
+export const TIMER_EVENT = "timer";
+export const TICKER_EVENT = "ticker";
