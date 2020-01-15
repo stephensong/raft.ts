@@ -38,9 +38,6 @@ async function main() {
         const nats = new Nats(nc);
         const handler = new SimpleHandler();
         const node = new Node({name: "cronos", size: 3} as IClusterInfo, handler, nats, "/tmp/raft.log");
-        process.on("SIGINT", () => {
-            node.close();
-        });
     } catch (err) {
         throw err;
     }

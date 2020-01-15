@@ -188,27 +188,9 @@ export class Node {
         return this.id;
     }
 
-    // Close will shutdown the raft.ts node and wait until the
-    // state is processed. We will clear rpc, timers, etc.
-    // and close the log.
-    public close() {
-        console.log("Cleanning up...");
-        this.rpc.close();
-        this.clearTimers();
-        this.closeLog();
-        console.log("Done. Exiting now...");
-    }
-
     private setupTimers() {
         // Election timer
         this.electTimer = new Timer(this.randElectionTimeout());
-    }
-
-    private clearTimers() {
-        if (this.electTimer) {
-            this.electTimer.stop();
-            delete this.electTimer;
-        }
     }
 
     // Make sure we have all the arguments to create the raft.ts node.
@@ -256,6 +238,7 @@ export class Node {
 
     // Setup callbacks for a LEADER
     private async setupAsLeader() {
+        // tslint:disable-next-line: no-console
         console.log("----setupAsLeader----");
 
         const self = this;
@@ -291,6 +274,7 @@ export class Node {
     }
 
     private setupAsCandidate() {
+        // tslint:disable-next-line: no-console
         console.log("----setupAsCandidate----");
 
         const self = this;
@@ -375,6 +359,7 @@ export class Node {
     }
 
     private setupAsFollower() {
+        // tslint:disable-next-line: no-console
         console.log("----setupAsFollower----");
 
         const self = this;
@@ -650,28 +635,12 @@ export class Node {
         this.leader = newLeader;
     }
 
-    private getLeader(): string {
-        return this.leader;
-    }
-
     private setTerm(term: number) {
         this.term = term;
     }
 
-    private currentTerm(): number | undefined {
-        return this.term;
-    }
-
     private setVote(candidate: string) {
         this.vote = candidate;
-    }
-
-    private currentVote(): string | undefined {
-        return this.vote;
-    }
-
-    private getLogPath(): string | undefined {
-        return this.logPath;
     }
 
     private initLog(): void {
@@ -691,11 +660,6 @@ export class Node {
             this.setTerm(ps.currentTerm);
             this.setVote(ps.votedFor);
         }
-    }
-
-    private closeLog(): void {
-        fs.unlinkSync(this.logPath);
-        this.logPath = "";
     }
 
     private writeState(): void {
